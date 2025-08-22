@@ -11,3 +11,5 @@ multiperson
 *.pyc
 *.swp
 .ipynb_checkpoints
+
+dataset

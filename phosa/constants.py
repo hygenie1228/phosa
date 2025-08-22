@@ -42,6 +42,7 @@ CLASS_ID_MAP = {
     "skateboard": 36,
     "surfboard": 37,
     "tennis": 38,
+    "custom": 0,
 }
 # Empirical intrinsic scales learned by our method. To convert from scale to size in
 # meters, multiply by 2 (i.e. scale of 1 corresponds to size of 2 meters).
@@ -54,6 +55,7 @@ MEAN_INTRINSIC_SCALE = {
     "skateboard": 0.35,
     "surfboard": 1.0,
     "tennis": 0.33,
+    "custom": 1.0,
 }
 MESH_MAP = {  # Class name -> list of paths to objs.
     "bicycle": ["models/meshes/bicycle_01.obj"]
@@ -68,6 +70,12 @@ PART_LABELS = {
             {"seat": ["butt"], "handle": ["lhand", "rhand"]},
         )
     ],
+    "custom": [
+        (
+            "models/meshes/custom_labels.json",
+            {},
+        )
+    ],
 }
 INTERACTION_MAPPING = {
     "bat": ["lpalm", "rpalm"],
@@ -78,6 +86,7 @@ INTERACTION_MAPPING = {
     "skateboard": ["lfoot", "rfoot", "lhand", "rhand"],
     "surfboard": ["lfoot", "rfoot", "lhand", "rhand"],
     "tennis": ["lpalm", "rpalm"],
+    "custom": [],
 }
 BBOX_EXPANSION = {
     "bat": 0.5,
@@ -94,6 +103,7 @@ BBOX_EXPANSION = {
     "surfboard": 0,
     "tennis": 0.4,
     "wineglass": 0.3,
+    "custom": 0.5,
 }
 BBOX_EXPANSION_PARTS = {
     "bat": 2.5,
@@ -110,6 +120,7 @@ BBOX_EXPANSION_PARTS = {
     "surfboard": 0.2,
     "tennis": 2,
     "wineglass": 0.3,
+    "custom": 0.5,
 }
 INTERACTION_THRESHOLD = {
     "bat": 5,
@@ -120,6 +131,7 @@ INTERACTION_THRESHOLD = {
     "skateboard": 3,
     "surfboard": 5,
     "tennis": 5,
+    "custom": 5,
 }
 DEFAULT_LOSS_WEIGHTS = {  # Loss weights.
     "default": {

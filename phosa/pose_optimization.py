@@ -267,6 +267,8 @@ def find_optimal_pose(
     num_initializations=2000,
     lr=1e-3,
 ):
+    batch_size = 128
+
     ts = 1
     textures = torch.ones(faces.shape[0], ts, ts, ts, 3, dtype=torch.float32).cuda()
     x, y, b, _ = square_bbox
@@ -345,6 +347,7 @@ def find_optimal_poses(
     batch_size=500,
     num_iterations=50,
     num_initializations=2000,
+    mesh_path=None,
 ):
     """
     Optimizes for pose with respect to a target mask using an occlusion-aware silhouette
@@ -374,7 +377,10 @@ def find_optimal_poses(
     if class_id is None:
         class_id = CLASS_ID_MAP[class_name]
     if vertices is None:
-        vertices, faces = nr.load_obj(MESH_MAP[class_name][mesh_index])
+        try:
+            vertices, faces = nr.load_obj(MESH_MAP[class_name][mesh_index])
+        except:
+            vertices, faces = nr.load_obj(mesh_path)
         vertices, faces = center_vertices(vertices, faces)
 
     class_masks, annotations = get_class_masks_from_instances(
@@ -383,7 +389,7 @@ def find_optimal_poses(
         add_ignore=True,
         rend_size=REND_SIZE,
         bbox_expansion=BBOX_EXPANSION_FACTOR,
-        min_confidence=0.95,
+        min_confidence=0.8,
     )
     object_parameters = {
         "rotations": [],

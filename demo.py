@@ -16,6 +16,7 @@ import argparse
 import json
 import logging
 import os
+import trimesh
 
 import numpy as np
 from PIL import Image
@@ -94,64 +95,102 @@ def get_args():
 
 
 def main(args):
-    loss_weights = DEFAULT_LOSS_WEIGHTS[args.class_name]
-    # Update defaults based on commandline args.
-    for loss_name in loss_weights.keys():
-        loss_weight = getattr(args, loss_name)
-        if hasattr(args, loss_name) and getattr(args, loss_name) is not None:
-            loss_weights[loss_name] = loss_weight
-            logger.info(f"Updated {loss_name} with {loss_weight}")
+    args.save_metadata = True
 
-    image = Image.open(args.filename).convert("RGB")
-    w, h = image.size
-    r = min(IMAGE_SIZE / w, IMAGE_SIZE / h)
-    w = int(r * w)
-    h = int(r * h)
-    image = np.array(image.resize((w, h)))
-    segmenter = get_pointrend_predictor()
-    instances = segmenter(image)["instances"]
+    loss_weights = DEFAULT_LOSS_WEIGHTS["default"]
+    args.class_name = "custom"
 
-    # Process Human Estimations.
-    is_person = instances.pred_classes == 0
-    bboxes_person = instances[is_person].pred_boxes.tensor.cpu().numpy()
-    masks_person = instances[is_person].pred_masks
-    human_predictor = get_bodymocap_predictor()
-    mocap_predictions = human_predictor.regress(
-        image[..., ::-1], bbox_xy_to_wh(bboxes_person)
-    )
-    person_parameters = process_mocap_predictions(
-        mocap_predictions=mocap_predictions, bboxes=bboxes_person, masks=masks_person
-    )
+    from glob import glob
+    from tqdm import tqdm
+    import os
 
-    object_parameters = find_optimal_poses(
-        instances=instances, class_name=args.class_name, mesh_index=args.mesh_index
-    )
+    exp_dir = "dataset/open3dhoi_gt2"
+    dir_list = sorted(glob(f"{exp_dir}/*"))
+    for dir_path in tqdm(dir_list):
+        sample = dir_path.split("/")[-1]
+        args.filename = os.path.join(dir_path, "image.jpg")
+        args.output_dir = os.path.join("output", exp_dir.split('/')[-1], sample)
+        obj_mesh_path = os.path.join(dir_path, "obj_pcd_h_align.obj")
+        
+        if os.path.isfile(f"{args.output_dir}/object_mesh.obj"):
+            continue
 
-    model = optimize_human_object(
-        person_parameters=person_parameters,
-        object_parameters=object_parameters,
-        class_name=args.class_name,
-        mesh_index=args.mesh_index,
-        loss_weights=loss_weights,
-    )
-    frontal, top_down = visualize_human_object(model, image)
+        try:
+            # Update defaults based on commandline args.
+            for loss_name in loss_weights.keys():
+                loss_weight = getattr(args, loss_name)
+                if hasattr(args, loss_name) and getattr(args, loss_name) is not None:
+                    loss_weights[loss_name] = loss_weight
+                    logger.info(f"Updated {loss_name} with {loss_weight}")
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    file_name = os.path.basename(args.filename)
-    ext = file_name[file_name.rfind(".") :]
-    frontal_path = os.path.join(args.output_dir, file_name)
-    Image.fromarray(frontal).save(frontal_path)
-    logger.info(f"Saved rendered image to {frontal_path}.")
-    top_down_path = frontal_path.replace(ext, "_top" + ext)
-    Image.fromarray(top_down).save(top_down_path)
-    logger.info(f"Saved top-down image to {top_down_path}.")
-    if args.save_metadata:
-        json_path = frontal_path.replace(ext, ".json")
-        metadata = model.get_parameters()
-        with open(json_path, "w") as f:
-            json.dump(metadata, json_path)
-        logger.info(f"Saved metadata to {json_path}.")
+            image = Image.open(args.filename).convert("RGB")
+            w, h = image.size
+            r = min(IMAGE_SIZE / w, IMAGE_SIZE / h)
+            w = int(r * w)
+            h = int(r * h)
+            image = np.array(image.resize((w, h)))
+            segmenter = get_pointrend_predictor(min_confidence=0.8)
+            instances = segmenter(image)["instances"]
 
+            # Process Human Estimations.
+            is_person = instances.pred_classes == 0
+            bboxes_person = instances[is_person].pred_boxes.tensor.cpu().numpy()
+            masks_person = instances[is_person].pred_masks
+            human_predictor = get_bodymocap_predictor()
+            mocap_predictions = human_predictor.regress(
+                image[..., ::-1], bbox_xy_to_wh(bboxes_person)
+            )
+            person_parameters = process_mocap_predictions(
+                mocap_predictions=mocap_predictions, bboxes=bboxes_person, masks=masks_person
+            )
+
+            object_parameters = find_optimal_poses(
+                instances=instances, class_name=args.class_name, mesh_index=args.mesh_index, mesh_path=obj_mesh_path
+            )
+            # object_parameters = {}
+            # object_parameters['rotations'] = torch.eye(3)[None].cuda()
+            # object_parameters['translations'] = torch.zeros((1,1,3)).cuda()
+
+
+
+            model = optimize_human_object(
+                person_parameters=person_parameters,
+                object_parameters=object_parameters,
+                class_name=args.class_name,
+                mesh_index=args.mesh_index,
+                loss_weights=loss_weights,
+                mesh_path=obj_mesh_path,
+            )
+            frontal, top_down = visualize_human_object(model, image)
+
+            os.makedirs(args.output_dir, exist_ok=True)
+
+            human_verts = model.get_verts_person()[0].detach().cpu().numpy()
+            human_faces = model.faces_person[0].detach().cpu().numpy()
+            object_verts = model.get_verts_object()[0].detach().cpu().numpy()
+            object_faces = model.faces_object[0].detach().cpu().numpy()
+            
+            human_mesh = trimesh.Trimesh(human_verts, human_faces)
+            human_mesh.export(f"{args.output_dir}/human_mesh.obj")
+            object_mesh = trimesh.Trimesh(object_verts, object_faces)
+            object_mesh.export(f"{args.output_dir}/object_mesh.obj")
+
+            file_name = os.path.basename(args.filename)
+            ext = file_name[file_name.rfind(".") :]
+            frontal_path = f"{args.output_dir}/front_image.png"
+            Image.fromarray(frontal).save(frontal_path)
+            logger.info(f"Saved rendered image to {frontal_path}.")
+            top_down_path = f"{args.output_dir}/top_image.png"
+            Image.fromarray(top_down).save(top_down_path)
+            logger.info(f"Saved top-down image to {top_down_path}.")
+            if args.save_metadata:
+                json_path = f"{args.output_dir}/metadata.json"
+                metadata = model.get_parameters()
+                with open(json_path, "w") as f:
+                    json.dump(metadata, open(json_path, 'w'))
+                logger.info(f"Saved metadata to {json_path}.")
+        except:
+            pass
 
 if __name__ == "__main__":
     main(get_args())

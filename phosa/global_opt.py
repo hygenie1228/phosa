@@ -595,12 +595,18 @@ def optimize_human_object(
     loss_weights=None,
     num_iterations=400,
     lr=1e-3,
+    mesh_path=None,
 ):
     if loss_weights is None:
         loss_weights = DEFAULT_LOSS_WEIGHTS[class_name]
 
     # Load mesh data.
-    mesh_path = MESH_MAP[class_name][mesh_index]
+    try:
+        mesh_path2 = MESH_MAP[class_name][mesh_index]
+    except:
+        mesh_path2 = mesh_path
+    mesh_path = mesh_path2
+
     verts_object_og, faces_object = nr.load_obj(mesh_path)
     verts_object_og, faces_object = center_vertices(verts_object_og, faces_object)
     faces_person = torch.IntTensor(np.load(SMPL_FACES_PATH).astype(int)).cuda()

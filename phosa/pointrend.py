@@ -27,7 +27,7 @@ def get_pointrend_predictor(min_confidence=0.9, image_format="RGB"):
     point_rend.add_pointrend_config(cfg)
     cfg.merge_from_file(POINTREND_CONFIG)
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = min_confidence
-    cfg.MODEL.WEIGHTS = POINTREND_MODEL_WEIGHTS
+    cfg.MODEL.WEIGHTS = "detectron2://PointRend/InstanceSegmentation/pointrend_rcnn_R_50_FPN_3x_coco/164955410/model_final_edd263.pkl" #POINTREND_MODEL_WEIGHTS
     cfg.INPUT.FORMAT = image_format
     return DefaultPredictor(cfg)
 
