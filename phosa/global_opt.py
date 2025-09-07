@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
+import cv2
 
 from phosa.constants import (
     BBOX_EXPANSION,
@@ -260,6 +261,11 @@ class Losses(object):
             image = self.keep_mask[i] * rend
             l_m = torch.sum((image - self.ref_mask[i]) ** 2) / self.keep_mask[i].sum()
             loss_sil += l_m
+
+            # print(v[0][0])
+            # cv2.imwrite('debug1.png', image[0].detach().cpu().numpy()*255) 
+            # cv2.imwrite('debug2.png', self.ref_mask[i].detach().cpu().numpy()*255) 
+
         return {"loss_sil": loss_sil / len(verts)}
 
     def compute_interaction_loss(self, verts_person, verts_object):
@@ -515,6 +521,7 @@ class PHOSA(nn.Module):
         loss_dict = {}
         verts_object = self.get_verts_object()
         verts_person = self.get_verts_person()
+
         if loss_weights is None or loss_weights["lw_sil"] > 0:
             loss_dict.update(
                 self.losses.compute_sil_loss(
@@ -533,11 +540,12 @@ class PHOSA(nn.Module):
                     verts_person=verts_person, verts_object=verts_object
                 )
             )
-        if loss_weights is None or loss_weights["lw_scale"] > 0:
-            loss_dict["loss_scale"] = self.losses.compute_intrinsic_scale_prior(
-                intrinsic_scales=self.int_scales_object,
-                intrinsic_mean=self.int_scale_object_mean,
-            )
+        # if loss_weights is None or loss_weights["lw_scale"] > 0:
+        #     loss_dict["loss_scale"] = self.losses.compute_intrinsic_scale_prior(
+        #         intrinsic_scales=self.int_scales_object,
+        #         intrinsic_mean=self.int_scale_object_mean,
+        #     )
+
         if loss_weights is None or loss_weights["lw_scale_person"] > 0:
             loss_dict["loss_scale_person"] = self.losses.compute_intrinsic_scale_prior(
                 intrinsic_scales=self.int_scales_person,
@@ -644,7 +652,8 @@ def optimize_human_object(
         class_name=class_name,
         int_scale_init=MEAN_INTRINSIC_SCALE[class_name],
     )
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr*10)
     loop = tqdm(range(num_iterations))
     for _ in loop:
         optimizer.zero_grad()
@@ -667,7 +676,11 @@ def visualize_human_object(model, image):
     h, w, c = image.shape
     L = max(h, w)
     new_image = np.pad(image.copy(), ((0, L - h), (0, L - w), (0, 0)))
-    new_image[mask] = rend[mask]
+    try:
+        new_image[mask] = rend[mask]
+    except:
+        new_image = cv2.resize(new_image, (rend.shape[1], rend.shape[0]))
+        new_image[mask] = rend[mask]
     new_image = (new_image[:h, :w] * 255).astype(np.uint8)
 
     # Rendered top-down image

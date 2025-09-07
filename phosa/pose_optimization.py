@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from scipy.ndimage.morphology import distance_transform_edt
 from tqdm.auto import tqdm
+import trimesh
 
 from phosa.constants import (
     BBOX_EXPANSION_FACTOR,
@@ -182,14 +183,17 @@ class PoseOptimizer(nn.Module):
         return self.pool(silhouette) - silhouette
 
     def forward(self):
-        verts = self.apply_transformation()
-        image = self.keep_mask * self.renderer(verts, self.faces, mode="silhouettes")
-        loss_dict = {}
-        loss_dict["mask"] = torch.sum((image - self.image_ref) ** 2, dim=(1, 2))
-        loss_dict["chamfer"] = self.lw_chamfer * torch.sum(
-            self.compute_edges(image) * self.edt_ref_edge, dim=(1, 2)
-        )
-        loss_dict["offscreen"] = 1000 * self.compute_offscreen_loss(verts)
+        try:
+            verts = self.apply_transformation()
+            image = self.keep_mask * self.renderer(verts, self.faces, mode="silhouettes")
+            loss_dict = {}
+            loss_dict["mask"] = torch.sum((image - self.image_ref) ** 2, dim=(1, 2))
+            loss_dict["chamfer"] = self.lw_chamfer * torch.sum(
+                self.compute_edges(image) * self.edt_ref_edge, dim=(1, 2)
+            )
+            loss_dict["offscreen"] = 1000 * self.compute_offscreen_loss(verts)
+        except:
+            import pdb; pdb.set_trace()
         return loss_dict, image
 
     def render(self):
@@ -266,8 +270,10 @@ def find_optimal_pose(
     num_iterations=50,
     num_initializations=2000,
     lr=1e-3,
-):
-    batch_size = 128
+):  
+    # [nhj warn]
+    batch_size = 64 # 128
+    num_initializations = 1000
 
     ts = 1
     textures = torch.ones(faces.shape[0], ts, ts, ts, 3, dtype=torch.float32).cuda()
@@ -381,6 +387,10 @@ def find_optimal_poses(
             vertices, faces = nr.load_obj(MESH_MAP[class_name][mesh_index])
         except:
             vertices, faces = nr.load_obj(mesh_path)
+
+            # tmp_mesh = trimesh.load(mesh_path)  # nr.load_obj(mesh_path)
+            # vertices, faces = tmp_mesh.vertices, tmp_mesh.faces
+            # vertices, faces = torch.tensor(vertices).float().cuda(), torch.tensor(faces).int().cuda()
         vertices, faces = center_vertices(vertices, faces)
 
     class_masks, annotations = get_class_masks_from_instances(
@@ -391,6 +401,12 @@ def find_optimal_poses(
         bbox_expansion=BBOX_EXPANSION_FACTOR,
         min_confidence=0.8,
     )
+
+    # import cv2 
+    # cv2.imwrite('debug.png', class_masks[0]*255)
+    # import pdb; pdb.set_trace()
+    
+
     object_parameters = {
         "rotations": [],
         "translations": [],
@@ -426,6 +442,10 @@ def find_optimal_poses(
         object_parameters["target_masks"].append(torch.from_numpy(mask).cuda())
         object_parameters["K_roi"].append(model.K.detach())
         object_parameters["masks"].append(annotation["mask"].cuda())
-    for k, v in object_parameters.items():
-        object_parameters[k] = torch.stack(v)
+    
+    try:
+        for k, v in object_parameters.items():
+            object_parameters[k] = torch.stack(v)
+    except:
+        import pdb; pdb.set_trace()
     return object_parameters

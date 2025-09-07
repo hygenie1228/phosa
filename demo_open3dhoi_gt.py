@@ -104,19 +104,19 @@ def main(args):
     from tqdm import tqdm
     import os
 
-    exp_dir = "dataset/open3dhoi_pred"
+    exp_dir = "dataset/open3dhoi_gt"
     dir_list = sorted(glob(f"{exp_dir}/*"))
     iii = 0
-    for i, dir_path in tqdm(enumerate(dir_list[::-1])):
+    for i, dir_path in tqdm(enumerate(dir_list[:])):
         sample = dir_path.split("/")[-1]
         args.filename = os.path.join(dir_path, "image.jpg")
         args.output_dir = os.path.join("output", exp_dir.split('/')[-1], sample)
         obj_mesh_path = os.path.join(dir_path, "obj_pcd_h_align.obj")
         
-        if os.path.isfile(f"{args.output_dir}/object_mesh.obj"):
-            continue
+        # if os.path.isfile(f"{args.output_dir}/object_mesh.obj"):
+        #     continue
 
-        try:
+        if True:
             # Update defaults based on commandline args.
             for loss_name in loss_weights.keys():
                 loss_weight = getattr(args, loss_name)
@@ -190,8 +190,10 @@ def main(args):
                 with open(json_path, "w") as f:
                     json.dump(metadata, open(json_path, 'w'))
                 logger.info(f"Saved metadata to {json_path}.")
-        except:
+        else:
             pass
+
+        break
 
 if __name__ == "__main__":
     main(get_args())

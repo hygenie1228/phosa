@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import trimesh
+import torch
 
 import numpy as np
 from PIL import Image
@@ -104,11 +105,12 @@ def main(args):
     from tqdm import tqdm
     import os
 
-    exp_dir = "dataset/open3dhoi_pred"
+    exp_dir = "dataset/open3dhoi_p1"
     dir_list = sorted(glob(f"{exp_dir}/*"))
     iii = 0
-    for i, dir_path in tqdm(enumerate(dir_list[::-1])):
+    for i, dir_path in tqdm(enumerate(dir_list[1::2])):
         sample = dir_path.split("/")[-1]
+
         args.filename = os.path.join(dir_path, "image.jpg")
         args.output_dir = os.path.join("output", exp_dir.split('/')[-1], sample)
         obj_mesh_path = os.path.join(dir_path, "obj_pcd_h_align.obj")
@@ -116,7 +118,7 @@ def main(args):
         if os.path.isfile(f"{args.output_dir}/object_mesh.obj"):
             continue
 
-        try:
+        if True:
             # Update defaults based on commandline args.
             for loss_name in loss_weights.keys():
                 loss_weight = getattr(args, loss_name)
@@ -125,25 +127,52 @@ def main(args):
                     logger.info(f"Updated {loss_name} with {loss_weight}")
 
             image = Image.open(args.filename).convert("RGB")
+            h_mask = Image.open(args.filename.replace('image.jpg', 'person_mask.png')).convert("RGB")
+            o_mask = Image.open(args.filename.replace('image.jpg', 'obj_mask.png')).convert("RGB")
+
             w, h = image.size
             r = min(IMAGE_SIZE / w, IMAGE_SIZE / h)
             w = int(r * w)
             h = int(r * h)
             image = np.array(image.resize((w, h)))
+            h_mask = np.array(h_mask.resize((w, h)))
+            o_mask = np.array(o_mask.resize((w, h)))
+            h_mask = torch.tensor((h_mask[:,:,0] > 128))[None].cuda()
+            o_mask = torch.tensor((o_mask[:,:,0] > 128))[None].cuda()
+
             segmenter = get_pointrend_predictor(min_confidence=0.8)
             instances = segmenter(image)["instances"]
 
             # Process Human Estimations.
             is_person = instances.pred_classes == 0
+
+            true_idx = torch.nonzero(is_person, as_tuple=True)[0]
+            if len(true_idx) > 0:
+                first_idx = true_idx[0]
+                x_new = torch.zeros_like(is_person, dtype=torch.bool)
+                x_new[first_idx] = True
+            else:
+                x_new = torch.zeros_like(is_person, dtype=torch.bool)
+            is_person = x_new
+            if is_person.any() == False:
+                is_person[0] = True
+
             bboxes_person = instances[is_person].pred_boxes.tensor.cpu().numpy()
             masks_person = instances[is_person].pred_masks
             human_predictor = get_bodymocap_predictor()
             mocap_predictions = human_predictor.regress(
                 image[..., ::-1], bbox_xy_to_wh(bboxes_person)
-            )
-            person_parameters = process_mocap_predictions(
-                mocap_predictions=mocap_predictions, bboxes=bboxes_person, masks=masks_person
-            )
+            )  
+
+            masks_person = (masks_person * 0 + h_mask).bool()
+            try:
+                person_parameters = process_mocap_predictions(
+                    mocap_predictions=mocap_predictions, bboxes=bboxes_person, masks=masks_person
+                )
+            except:
+                import pdb; pdb.set_trace()
+
+            instances.pred_masks = (instances.pred_masks * 0 + o_mask).bool()
 
             object_parameters = find_optimal_poses(
                 instances=instances, class_name=args.class_name, mesh_index=args.mesh_index, mesh_path=obj_mesh_path
@@ -151,8 +180,6 @@ def main(args):
             # object_parameters = {}
             # object_parameters['rotations'] = torch.eye(3)[None].cuda()
             # object_parameters['translations'] = torch.zeros((1,1,3)).cuda()
-
-
 
             model = optimize_human_object(
                 person_parameters=person_parameters,
@@ -190,7 +217,7 @@ def main(args):
                 with open(json_path, "w") as f:
                     json.dump(metadata, open(json_path, 'w'))
                 logger.info(f"Saved metadata to {json_path}.")
-        except:
+        else:
             pass
 
 if __name__ == "__main__":

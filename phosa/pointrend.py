@@ -69,6 +69,9 @@ def get_class_masks_from_instances(
     class_ids = instances.pred_classes.numpy()
     scores = instances.scores.numpy()
     keep_ids = np.logical_and(class_ids == class_id, scores > min_confidence)
+
+    if keep_ids.any() == False:
+        keep_ids[0] = True
     bit_masks = BitMasks(instances.pred_masks)
 
     keep_annotations = []

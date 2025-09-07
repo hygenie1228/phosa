@@ -13,3 +13,6 @@ multiperson
 .ipynb_checkpoints
 
 dataset
+*.ply
+*.png
+*.obj
