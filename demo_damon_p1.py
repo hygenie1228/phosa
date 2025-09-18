@@ -105,20 +105,17 @@ def main(args):
     from tqdm import tqdm
     import os
 
-    exp_dir = "dataset/open3dhoi_p1"
+    exp_dir = "dataset/damon_p1"
     dir_list = sorted(glob(f"{exp_dir}/*"))
     iii = 0
-    for i, dir_path in tqdm(enumerate(dir_list[::2][::-1s])):
+    for i, dir_path in tqdm(enumerate(dir_list[:])):
         sample = dir_path.split("/")[-1]
 
         args.filename = os.path.join(dir_path, "image.jpg")
         args.output_dir = os.path.join("output", exp_dir.split('/')[-1], sample)
         obj_mesh_path = os.path.join(dir_path, "obj_pcd_h_align.obj")
         
-        # if os.path.isfile(f"{args.output_dir}/human_metadata.json"):
-        #     continue
-
-        if os.path.isfile(f"{args.output_dir}/object_mesh.obj"):
+        if os.path.isfile(f"{args.output_dir}/human_metadata.json"):
             continue
 
         try:
@@ -192,6 +189,10 @@ def main(args):
                 mocap_predictions=mocap_predictions, bboxes=bboxes_person, masks=masks_person
             )
 
+            person_parameters = process_mocap_predictions(
+                mocap_predictions=mocap_predictions, bboxes=bboxes_person, masks=masks_person
+            )
+
             joints = mocap_predictions[0]['pred_joints_3d']
             # vertices =  mocap_predictions[0]['pred_vertices_smpl']
             pelvis = joints[[9, 12]].mean(0)
@@ -201,8 +202,8 @@ def main(args):
                 "verts_person_og": person_parameters["verts"].detach().cpu().numpy().tolist(),
                 "pelvis": pelvis.tolist(),
             }
-            os.makedirs(f"{args.output_dir}", exist_ok=True)
             json.dump(human_metadata, open(f"{args.output_dir}/human_metadata.json", 'w'))
+            continue
 
             instances.pred_masks = (instances.pred_masks * 0 + o_mask).bool()
 
@@ -250,7 +251,7 @@ def main(args):
                     json.dump(metadata, open(json_path, 'w'))
                 logger.info(f"Saved metadata to {json_path}.")
         except:
-            continue
+            pass
 
 if __name__ == "__main__":
     main(get_args())

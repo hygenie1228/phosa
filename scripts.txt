@@ -1,1 +1,1 @@
-python demo.py --filename input/000000038829.jpg
+python demo_open3dhoi_p1.py --filename input/000000038829.jpg

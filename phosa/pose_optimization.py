@@ -10,6 +10,7 @@ import torch.nn as nn
 from scipy.ndimage.morphology import distance_transform_edt
 from tqdm.auto import tqdm
 import trimesh
+import cv2
 
 from phosa.constants import (
     BBOX_EXPANSION_FACTOR,
@@ -194,6 +195,9 @@ class PoseOptimizer(nn.Module):
             loss_dict["offscreen"] = 1000 * self.compute_offscreen_loss(verts)
         except:
             import pdb; pdb.set_trace()
+
+        # cv2.imwrite('debug1.png', image[0].detach().cpu().numpy()*255) 
+        # cv2.imwrite('debug2.png', self.image_ref[0].detach().cpu().numpy()*255) 
         return loss_dict, image
 
     def render(self):
@@ -273,7 +277,7 @@ def find_optimal_pose(
 ):  
     # [nhj warn]
     batch_size = 64 # 128
-    num_initializations = 1000
+    num_initializations = 50
 
     ts = 1
     textures = torch.ones(faces.shape[0], ts, ts, ts, 3, dtype=torch.float32).cuda()
@@ -318,7 +322,10 @@ def find_optimal_pose(
                 best_loss_single = losses[ind]
                 best_rots_single = model.rotations[ind].detach().clone()
                 best_trans_single = model.translations[ind].detach().clone()
-            loop.set_description(f"loss: {best_loss_single.item():.3g}")
+            try:
+                loop.set_description(f"loss: {best_loss_single.item():.3g}")
+            except:
+                loop.set_description(f"loss: {best_loss_single:.3g}")
             loop.update()
         if best_rots is None:
             best_rots = model.rotations
@@ -355,6 +362,9 @@ def find_optimal_poses(
     num_initializations=2000,
     mesh_path=None,
 ):
+    num_iterations = 20
+    num_initializations= 200
+
     """
     Optimizes for pose with respect to a target mask using an occlusion-aware silhouette
     loss.
@@ -386,12 +396,14 @@ def find_optimal_poses(
         try:
             vertices, faces = nr.load_obj(MESH_MAP[class_name][mesh_index])
         except:
-            vertices, faces = nr.load_obj(mesh_path)
+            # vertices, faces = nr.load_obj(mesh_path)
+            # import pdb; pdb.set_trace()
 
-            # tmp_mesh = trimesh.load(mesh_path)  # nr.load_obj(mesh_path)
-            # vertices, faces = tmp_mesh.vertices, tmp_mesh.faces
-            # vertices, faces = torch.tensor(vertices).float().cuda(), torch.tensor(faces).int().cuda()
+            tmp_mesh = trimesh.load(mesh_path)  # nr.load_obj(mesh_path)
+            vertices, faces = tmp_mesh.vertices, tmp_mesh.faces
+            vertices, faces = torch.tensor(vertices).float().cuda(), torch.tensor(faces).int().cuda()
         vertices, faces = center_vertices(vertices, faces)
+
 
     class_masks, annotations = get_class_masks_from_instances(
         instances=instances,

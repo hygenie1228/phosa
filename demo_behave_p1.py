@@ -105,10 +105,10 @@ def main(args):
     from tqdm import tqdm
     import os
 
-    exp_dir = "dataset/open3dhoi_p1"
+    exp_dir = "dataset/behave_p1"
     dir_list = sorted(glob(f"{exp_dir}/*"))
     iii = 0
-    for i, dir_path in tqdm(enumerate(dir_list[::2][::-1s])):
+    for i, dir_path in tqdm(enumerate(dir_list[::1][:])):
         sample = dir_path.split("/")[-1]
 
         args.filename = os.path.join(dir_path, "image.jpg")

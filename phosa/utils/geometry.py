@@ -45,7 +45,7 @@ def combine_verts(verts_list):
     return verts_combined
 
 
-def center_vertices(vertices, faces, flip_y=True):
+def center_vertices(vertices, faces, flip_y=False):
     """
     Centroid-align vertices.
 

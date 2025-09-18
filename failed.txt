@@ -1,0 +1,2 @@
+bench-HICO_train2015_00000582
+tennis_racket-COCO_train2014_000000528517

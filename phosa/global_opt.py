@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 import cv2
+import trimesh
 
 from phosa.constants import (
     BBOX_EXPANSION,
@@ -262,6 +263,7 @@ class Losses(object):
             l_m = torch.sum((image - self.ref_mask[i]) ** 2) / self.keep_mask[i].sum()
             loss_sil += l_m
 
+            # loss_sil *= 25.0
             # print(v[0][0])
             # cv2.imwrite('debug1.png', image[0].detach().cpu().numpy()*255) 
             # cv2.imwrite('debug2.png', self.ref_mask[i].detach().cpu().numpy()*255) 
@@ -601,7 +603,7 @@ def optimize_human_object(
     class_name="bicycle",
     mesh_index=0,
     loss_weights=None,
-    num_iterations=400,
+    num_iterations=80, #400,
     lr=1e-3,
     mesh_path=None,
 ):
@@ -615,7 +617,11 @@ def optimize_human_object(
         mesh_path2 = mesh_path
     mesh_path = mesh_path2
 
-    verts_object_og, faces_object = nr.load_obj(mesh_path)
+
+    # verts_object_og, faces_object = nr.load_obj(mesh_path)
+    tmp_mesh = trimesh.load(mesh_path)  # nr.load_obj(mesh_path)
+    verts_object_og, faces_object = tmp_mesh.vertices, tmp_mesh.faces
+    verts_object_og, faces_object = torch.tensor(verts_object_og).float().cuda(), torch.tensor(faces_object).int().cuda()
     verts_object_og, faces_object = center_vertices(verts_object_og, faces_object)
     faces_person = torch.IntTensor(np.load(SMPL_FACES_PATH).astype(int)).cuda()
 
